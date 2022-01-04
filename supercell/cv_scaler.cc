@@ -26,6 +26,10 @@
 //
 // Calibration settings.
 
+// ### MB 20220103 Added Fix for Cirrus random-pitch, see lines below marked with ###
+// ( Cirrus is a module by tangible waves for AE Modular https://www.tangiblewaves.com/store/p142/CIRRUS.html )
+
+
 #include "supercell/cv_scaler.h"
 
 #include <algorithm>
@@ -40,6 +44,7 @@
 #else
 # define CV_FLIP false
 #endif
+
 
 namespace clouds {
 
@@ -169,21 +174,27 @@ void CvScaler::Read(Parameters* parameters) {
   CONSTRAIN(output_level, 0.0f, 1.0f);
   output_level_ = (1.0f - output_level);
   
-  parameters->pitch = stmlib::Interpolate(
-      lut_quantized_pitch,
-      smoothed_adc_value_[ADC_CHANNEL_LAST + ADC_PITCH_POTENTIOMETER],
-      1024.0f);
+  parameters->pitch = stmlib::Interpolate( lut_quantized_pitch,smoothed_adc_value_[ADC_CHANNEL_LAST + ADC_PITCH_POTENTIOMETER],1024.0f);
 
-  
+  /*  ### MB 20220103 Fix for Cirrus random-pitch, disabled the following 3 lines ---
   float note = calibration_data_->pitch_offset;
   note += smoothed_adc_value_[ADC_VOCT_CV] * calibration_data_->pitch_scale;
   note += smoothed_adc_value_[ADC_PITCH_CV] * 24.0f;
+  ### MB 20220103 Fix for Cirrus random-pitch */
+  
+  // ### MB 20220103 Fix for Cirrus random-pitch, added the following 4 lines ---
+  float note = 1.f - smoothed_adc_value_[ADC_VOCT_CV];   
+  note *= 60.f;
+  note -= 24.f; // ### MB 20220103 Default Pitch Values Clouds V0.2: pitch_offset: 66,6737 pitch_scale: -84,269 => Start at about -18, modified for version without calibration...
+  note += (1.f - smoothed_adc_value_[ADC_PITCH_CV]) * 24.0f;
+  
+  note_ = note;
   if (fabs(note - note_) > 0.5f) {
     note_ = note;
   } else {
     ONE_POLE(note_, note, 0.2f)
   } 
-  parameters->pitch += note_;
+  parameters->pitch += note_;  
   CONSTRAIN(parameters->pitch, -48.0f, 48.0f);
 
   // Update KAMMERL_MODE parameters
