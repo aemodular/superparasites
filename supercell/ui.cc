@@ -1,4 +1,4 @@
-// Copyright 2014 Olivier Gillet.
+// Copyright 2014 Olivier Gillet. 
 //
 // Author: Olivier Gillet (ol.gillet@gmail.com)
 //
@@ -25,6 +25,7 @@
 // -----------------------------------------------------------------------------
 //
 // User interface.
+// ### MB 20220106 Added options for Cirrus random-pitch issue, see lines below marked with ###
 
 #include "supercell/ui.h"
 
@@ -55,7 +56,7 @@ void Ui::Init(
   cv_scaler_ = cv_scaler;
   leds_.Init();
   switches_.Init();
-  
+  random_pitch_state_ = 0;      // ### MB 20220104 new feature for Cirrus 0==off, 1==on, 2==chromatic quantize 
   processor_ = processor;
   inmeter_ = inmeter;
   outmeter_ = outmeter;
@@ -87,6 +88,7 @@ void Ui::Init(
     dac_.StartNoise();
   else
     dac_.StopNoise();
+  
 }
 
 void Ui::SaveState() {
@@ -406,12 +408,44 @@ void Ui::OnSwitchReleased(const Event& e) {
             if (e.data < kLongPressDuration) {
                 bool mute_state = processor_->mute_out();
                 processor_->set_mute_out(!mute_state);
-            } else if (e.data >= kVeryLongPressDuration) {
-                if (switches_.pressed(SWITCH_MUTE_IN)) {
+            } else if (e.data >= kVeryLongPressDuration) 
+            {
+                if (switches_.pressed(SWITCH_MUTE_IN)) 
+                {
+                    // ### MB 20220104 new feature for Cirrus:  CV pitch and/or CV VOct modes
+                    random_pitch_state_++;
+                    random_pitch_state_ %= 4;
+                    cv_scaler_->set_random_pitch(random_pitch_state_);      // ### MB 20220106 distribute the new mode to the cv-scaler and granulator
+                    switch(random_pitch_state_ )                // ### MB 20220106 ,mainly added only for LED-visualisation of "random_pitch_state"
+                    {
+                      case 0:                                               // ### all Pitch CVs active, no quantize
+                        processor_->set_mute_in(false);
+                        processor_->set_mute_out(false);
+                        break;
+                      
+                      case 1:                                               // ### V/Oct Pitch off, Pitch-CV off
+                        processor_->set_mute_in(false);
+                        processor_->set_mute_out(true);
+                        break;
+                      
+                      case 2:                                               // ### V/Oct Pitch off, Pitch-CV on
+                        processor_->set_mute_in(true);
+                        processor_->set_mute_out(false);
+                        break;
+                      
+                      case 3:                                                // ### V/Oct Pitch (output) quantized, Pitch-CV on    
+                        processor_->set_mute_in(true);
+                        processor_->set_mute_out(true);
+                        break;
+                      
+                    }
                     bool dac_state = dac_.is_generating_noise();
-                    if (dac_state) {
+                    if (dac_state) 
+                    {
                         dac_.StopNoise();
-                    } else {
+                    } 
+                    else 
+                    {
                         dac_.StartNoise();
                     }
                     SaveState();

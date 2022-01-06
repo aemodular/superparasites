@@ -1,4 +1,4 @@
-// Copyright 2014 Olivier Gillet.
+// Copyright 2014 Olivier Gillet. 
 //
 // Author: Olivier Gillet (ol.gillet@gmail.com)
 //
@@ -49,7 +49,7 @@ struct CvTransformation {
 
 class CvScaler {
  public:
-  CvScaler() { }
+  CvScaler() { }             
   ~CvScaler() { }
   
   void Init(CalibrationData* calibration_data);
@@ -99,6 +99,7 @@ class CvScaler {
   inline float pan_pot() const {
     return smoothed_adc_value_[ADC_CHANNEL_LAST + ADC_SPREAD_POTENTIOMETER];
   }
+  inline void set_random_pitch(uint8_t random_pitch) { random_pitch_ = random_pitch; }     // ### MB 20220104 new feature for Cirrus 0==off, 1==on, 2==chromatic quantize
 
  private:
   static const int kAdcLatency = 5;
@@ -119,7 +120,9 @@ class CvScaler {
   
   bool previous_capture_[kAdcLatency];
   bool previous_gate_[kAdcLatency];
-  
+  uint8_t random_pitch_;                 // ### MB 20220104 new feature for Cirrus 0==off, 1==on, 2==chromatic quantize
+ 
+ 
   DISALLOW_COPY_AND_ASSIGN(CvScaler);
 };
 

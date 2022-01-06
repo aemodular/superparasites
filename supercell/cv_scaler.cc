@@ -1,4 +1,4 @@
-// Copyright 2014 Olivier Gillet.
+// Copyright 2014 Olivier Gillet. 
 //
 // Author: Olivier Gillet (ol.gillet@gmail.com)
 //
@@ -25,9 +25,7 @@
 // -----------------------------------------------------------------------------
 //
 // Calibration settings.
-
-// ### MB 20220103 Added Fix for Cirrus random-pitch, see lines below marked with ###
-// ( Cirrus is a module by tangible waves for AE Modular https://www.tangiblewaves.com/store/p142/CIRRUS.html )
+// ### MB 20220103 Added fix (or at least mitigation) for Cirrus random-pitch issue, see lines below marked with ###
 
 
 #include "supercell/cv_scaler.h"
@@ -63,7 +61,6 @@ CvTransformation CvScaler::transformations_[ADC_CHANNELS_TOTAL] = {
   // ADC_PITCH_CV,
   //{ true, true, 1.00f },
   { CV_FLIP, true, 0.90f },
-  // ADC_SPREAD_CV,
   { CV_FLIP, true, 0.2f },
   // ADC_FEEDBACK_CV,
   { CV_FLIP, true, 0.2f },
@@ -73,8 +70,8 @@ CvTransformation CvScaler::transformations_[ADC_CHANNELS_TOTAL] = {
   { CV_FLIP, true, 0.2f },
   // ADC_TEXTURE_CV,
   { CV_FLIP, true, 0.01f },
-  // ADC_CV_VOCT,
-  { false, false, 1.00f },
+  // ADC_CV_VOCT,                 
+  { CV_FLIP, false, 1.0f },                      // ### MB 20220105 changed from  { false, false, 1.00f }, because with Cirrus VOCT is going "backwards", too!
   // ADC_VCA_OUT_LEVEL
   { false, false, 0.1f },  // Added for VU Meter control Rev2+ only
   // ADC_POSITION_POTENTIOMETER,
@@ -100,6 +97,7 @@ void CvScaler::Init(CalibrationData* calibration_data) {
   pots_adc_.Init();
   gate_input_.Init();
   calibration_data_ = calibration_data;
+  random_pitch_= 0;      // ### MB 20220104 Cirrus pitchCV-in modes: 0: 1V/Oct+Pitch-CV active, 1: 1V/Oct+Pitch-CV inactive, 2: 1V/Oct inactive, Pitch-CV active 3: 1V/Oct qantized, Pitch-CV active
   fill(&smoothed_adc_value_[0], &smoothed_adc_value_[ADC_CHANNELS_TOTAL], 0.0f);
   note_ = 0.0f;
   
@@ -107,14 +105,21 @@ void CvScaler::Init(CalibrationData* calibration_data) {
   fill(&previous_gate_[0], &previous_gate_[kAdcLatency], false);
 }
 
-void CvScaler::Read(Parameters* parameters) {
+void CvScaler::Read(Parameters* parameters) 
+{
+  bool pitch_cv_used = true; // ### MB 20220105
+  bool voct_cv_used = true;  // ### MB 20220105
   pots_adc_.Scan();
-  for (int8_t i = 0; i < ADC_CHANNELS_TOTAL; ++i) {
+  for (int8_t i = 0; i < ADC_CHANNELS_TOTAL; ++i) 
+  {
     const CvTransformation& transformation = transformations_[i];
     float value; 
-    if (i < ADC_CHANNEL_LAST) {
+    if (i < ADC_CHANNEL_LAST) 
+    {
         value = adc_.float_value(i);
-    } else {
+    }
+    else 
+    {
         value = pots_adc_.float_value(i - ADC_CHANNEL_LAST);
     }
     if (transformation.flip) {
@@ -123,9 +128,14 @@ void CvScaler::Read(Parameters* parameters) {
     if (transformation.remove_offset) {
       value -= calibration_data_->offset[i];
     }
-    smoothed_adc_value_[i] += transformation.filter_coefficient * \
-        (value - smoothed_adc_value_[i]);
+    smoothed_adc_value_[i] += transformation.filter_coefficient * (value - smoothed_adc_value_[i]);
   }
+  // ### MB 20220105 Check pitch-CVfor potentially no cable connected, CV set to Zero, or disabled via CV-Pitch-Mode => ignore! random_pitch_ set via ui.cc!
+  if( smoothed_adc_value_[ADC_PITCH_CV] <=  0.002f || random_pitch_==1)   // 0.016 would be the lowest C#-note...
+    pitch_cv_used = false;        // ### MB 20220104 Cirrus pitchCV-in modes: 0: 1V/Oct+Pitch-CV active, 1: 1V/Oct+Pitch-CV inactive, 2: 1V/Oct inactive, Pitch-CV active 3: 1V/Oct qantized, Pitch-CV active
+
+  if( smoothed_adc_value_[ADC_VOCT_CV] <=  0.002f || random_pitch_==1 || random_pitch_==2)       // 0.016 would be the lowest C#-note...
+    voct_cv_used = false;         // ### MB 20220104 Cirrus pitchCV-in modes: 0: 1V/Oct+Pitch-CV active, 1: 1V/Oct+Pitch-CV inactive, 2: 1V/Oct inactive, Pitch-CV active 3: 1V/Oct qantized, Pitch-CV active
   
   float position = smoothed_adc_value_[ADC_CHANNEL_LAST + ADC_POSITION_POTENTIOMETER];
   position += smoothed_adc_value_[ADC_POSITION_CV] * 2.0f;
@@ -174,26 +184,33 @@ void CvScaler::Read(Parameters* parameters) {
   CONSTRAIN(output_level, 0.0f, 1.0f);
   output_level_ = (1.0f - output_level);
   
-  parameters->pitch = stmlib::Interpolate( lut_quantized_pitch,smoothed_adc_value_[ADC_CHANNEL_LAST + ADC_PITCH_POTENTIOMETER],1024.0f);
+  // ### MB 20220103 --- vvv Fix for Cirrus random-pitch start vvv ---
+  float pitch_combined = smoothed_adc_value_[ADC_CHANNEL_LAST + ADC_PITCH_POTENTIOMETER];
+  if( pitch_cv_used )
+    pitch_combined += smoothed_adc_value_[ADC_PITCH_CV] * 2.0f;     // ### MB 20220103 "else": nothing to do, center value should be 0 more or less
+  CONSTRAIN(pitch_combined, 0.0f, 1.0f);
+  parameters->pitch = stmlib::Interpolate( lut_quantized_pitch,pitch_combined,1024.0f);
 
-  /*  ### MB 20220103 Fix for Cirrus random-pitch, disabled the following 3 lines ---
-  float note = calibration_data_->pitch_offset;
-  note += smoothed_adc_value_[ADC_VOCT_CV] * calibration_data_->pitch_scale;
-  note += smoothed_adc_value_[ADC_PITCH_CV] * 24.0f;
-  ### MB 20220103 Fix for Cirrus random-pitch */
-  
-  // ### MB 20220103 Fix for Cirrus random-pitch, added the following 4 lines ---
-  float note = 1.f - smoothed_adc_value_[ADC_VOCT_CV];   
-  note *= 60.f;
-  note -= 24.f; // ### MB 20220103 Default Pitch Values Clouds V0.2: pitch_offset: 66,6737 pitch_scale: -84,269 => Start at about -18, modified for version without calibration...
-  note += (1.f - smoothed_adc_value_[ADC_PITCH_CV]) * 24.0f;
-  
-  note_ = note;
-  if (fabs(note - note_) > 0.5f) {
-    note_ = note;
-  } else {
-    ONE_POLE(note_, note, 0.2f)
-  } 
+  if(voct_cv_used) 
+  {
+    float note = smoothed_adc_value_[ADC_VOCT_CV];    
+    note *= 60.f;
+    note -= 24.f;
+    if (fabs(note - note_) > 0.5f) 
+      note_ = note;
+    else 
+       ONE_POLE(note_, note, 0.2f)
+  }
+  else
+    note_ = 0.f;
+ 
+   if(random_pitch_==3) // ### MB 20220104 Cirrus pitchCV-in modes: 0: 1V/Oct+Pitch-CV active, 1: 1V/Oct+Pitch-CV inactive, 2: 1V/Oct inactive, Pitch-CV active 3: 1V/Oct qantized, Pitch-CV active
+   { 
+      if (note_ < 0.5f) 
+        note_ -= 0.5f;
+      note_ = (int)(note_ + 0.5f);      // "commercially round" to nearest whole note
+   }
+  // ### MB 20220103 --- ^^^ Fix for Cirrus random-pitch end ^^^ ---
   parameters->pitch += note_;  
   CONSTRAIN(parameters->pitch, -48.0f, 48.0f);
 
