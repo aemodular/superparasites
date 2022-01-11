@@ -28,7 +28,7 @@ F_CPU          = 168000000L
 SYSCLOCK       = SYSCLK_FREQ_168MHz
 FAMILY         = f4xx
 # USB            = enabled
-MCU            = STM32F427_437xx
+MCU            = STM32F427VIT6 
 LINKER_SCRIPT  = supercell/linker_scripts/stm32f427x_flash_application_large.ld
 
 APPLICATION_LARGE = TRUE

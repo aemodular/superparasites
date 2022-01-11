@@ -50,7 +50,7 @@ Settings settings;
 Ui ui;
 
 // Pre-allocate big blocks in main memory and CCM. No malloc here.
-uint8_t block_mem[118784];
+uint8_t block_mem[118528];      //  ### MB 20220109 reduced by 256 bytes from 118784 for new variables needed for Cirrus random pitch issue, otherwise the sound-mode "Spectral Clouds" crashes when feedback is high
 uint8_t block_ccm[65536 - 128] __attribute__ ((section (".ccmdata")));
 //uint8_t block_ccm[65536 - 128] __attribute__ ((section (".ccmram")));
 

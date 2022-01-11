@@ -415,29 +415,46 @@ void Ui::OnSwitchReleased(const Event& e) {
                     // ### MB 20220104 new feature for Cirrus:  CV pitch and/or CV VOct modes
                     random_pitch_state_++;
                     random_pitch_state_ %= 4;
-                    cv_scaler_->set_random_pitch(random_pitch_state_);      // ### MB 20220106 distribute the new mode to the cv-scaler and granulator
-                    switch(random_pitch_state_ )                // ### MB 20220106 ,mainly added only for LED-visualisation of "random_pitch_state"
+                  
+                    if( random_pitch_state_ == 3 )
+                    {
+                       cv_scaler_->set_voct_cv_quantized(true);             // ### MB 20220109   
+                       cv_scaler_->set_voct_cv_dejittered(true);        // ### MB 20220109   
+                    }  
+                    else
+                    {  
+                      cv_scaler_->set_voct_cv_quantized(false);             // ### MB 20220109   
+                      cv_scaler_->set_voct_cv_dejittered(false);             // ### MB 20220109 
+                    }  
+                    switch(random_pitch_state_ )                // ### MB 20220106 ,mainly added for LED-visualisation of "random_pitch_state"
                     {
                       case 0:                                               // ### all Pitch CVs active, no quantize
                         processor_->set_mute_in(false);
                         processor_->set_mute_out(false);
+                        cv_scaler_->set_voct_cv_used(true);
+                        cv_scaler_->set_pitch_cv_used(true);
                         break;
                       
                       case 1:                                               // ### V/Oct Pitch off, Pitch-CV off
                         processor_->set_mute_in(false);
                         processor_->set_mute_out(true);
+                        cv_scaler_->set_voct_cv_used(false);
+                        cv_scaler_->set_pitch_cv_used(false);
                         break;
                       
                       case 2:                                               // ### V/Oct Pitch off, Pitch-CV on
                         processor_->set_mute_in(true);
                         processor_->set_mute_out(false);
+                        cv_scaler_->set_voct_cv_used(false);
+                        cv_scaler_->set_pitch_cv_used(true);
                         break;
                       
                       case 3:                                                // ### V/Oct Pitch (output) quantized, Pitch-CV on    
                         processor_->set_mute_in(true);
                         processor_->set_mute_out(true);
-                        break;
-                      
+                        cv_scaler_->set_voct_cv_used(true);  // ### Quantize and dejitter also will be applied here, this has been set above already!
+                        cv_scaler_->set_pitch_cv_used(false);
+                      break;
                     }
                     bool dac_state = dac_.is_generating_noise();
                     if (dac_state) 

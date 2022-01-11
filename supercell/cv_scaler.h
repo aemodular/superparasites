@@ -39,6 +39,23 @@
 
 namespace clouds {
 
+// ### MB 20220110  
+class CirrusExpFltr 
+ {
+    public:
+      CirrusExpFltr() 
+      {
+          sum = 0.f;
+      }        
+      float process(float input) 
+      {
+          sum = ( sum * 98.f + input ) / 99.f;      // ### MB 20220111 - 64/65 in principle is max stable, but triggers a kind of portamento-effect and sometimes note get missed completely
+          return(sum);
+      }
+    private:
+      float sum;
+};    
+
 #define ADC_CHANNELS_TOTAL (ADC_CHANNEL_LAST + ADC_CHANNEL_POTENTIOMETER_LAST)
 
 struct CvTransformation {
@@ -99,7 +116,10 @@ class CvScaler {
   inline float pan_pot() const {
     return smoothed_adc_value_[ADC_CHANNEL_LAST + ADC_SPREAD_POTENTIOMETER];
   }
-  inline void set_random_pitch(uint8_t random_pitch) { random_pitch_ = random_pitch; }     // ### MB 20220104 new feature for Cirrus 0==off, 1==on, 2==chromatic quantize
+  inline void set_pitch_cv_used(bool on_off) { pitch_cv_used_ = on_off; }                // ### MB 20220109
+  inline void set_voct_cv_used(bool on_off) { voct_cv_used_ = on_off; }                  // ### MB 20220109
+  inline void set_voct_cv_quantized(bool on_off) { voct_cv_quantized_ = on_off; }     // ### MB 20220109  
+  inline void set_voct_cv_dejittered(bool on_off) { voct_cv_dejittered_ = on_off; }     // ### MB 20220109  
 
  private:
   static const int kAdcLatency = 5;
@@ -120,9 +140,13 @@ class CvScaler {
   
   bool previous_capture_[kAdcLatency];
   bool previous_gate_[kAdcLatency];
-  uint8_t random_pitch_;                 // ### MB 20220104 new feature for Cirrus 0==off, 1==on, 2==chromatic quantize
- 
- 
+  bool pitch_cv_used_;                   // ### MB 20220109   
+  bool voct_cv_used_;                    // ### MB 20220109   
+  bool voct_cv_quantized_;             // ### MB 20220109   
+  bool voct_cv_dejittered_;             // ### MB 20220109 
+  CirrusExpFltr quantize_dejitter_;      // ### MB 20220110
+  CirrusExpFltr pot_dejitter_;             // ### MB 20220110  
+   
   DISALLOW_COPY_AND_ASSIGN(CvScaler);
 };
 
