@@ -57,6 +57,7 @@ void Ui::Init(
   leds_.Init();
   switches_.Init();
   random_pitch_state_ = 0;      // ### MB 20220104 new feature for Cirrus 0==off, 1==on, 2==chromatic quantize 
+  pitch_state3_toggle_ = false;  // ### MB 20220110   
   processor_ = processor;
   inmeter_ = inmeter;
   outmeter_ = outmeter;
@@ -405,24 +406,45 @@ void Ui::OnSwitchReleased(const Event& e) {
       break;
     case SWITCH_MUTE_OUT:
         {
-            if (e.data < kLongPressDuration) {
+            if (e.data < kLongPressDuration) 
+            {
                 bool mute_state = processor_->mute_out();
                 processor_->set_mute_out(!mute_state);
-            } else if (e.data >= kVeryLongPressDuration) 
+            } 
+            else if  (e.data >= kVeryLongPressDuration) 
             {
-                if (switches_.pressed(SWITCH_MUTE_IN)) 
+                if (!switches_.pressed(SWITCH_MUTE_IN))     // ### MB 20220111 "Easteregg": in Pitch-Mode 3 via long press of right Mute only we can switch on/off quantize and dejitter
                 {
-                    // ### MB 20220104 new feature for Cirrus:  CV pitch and/or CV VOct modes
-                    random_pitch_state_++;
-                    random_pitch_state_ %= 4;
-                  
-                    if( random_pitch_state_ == 3 )
+                    if(random_pitch_state_ == 3)
                     {
-                       cv_scaler_->set_voct_cv_quantized(true);             // ### MB 20220109   
+                      pitch_state3_toggle_ = !pitch_state3_toggle_;
+                      processor_->ToggleFreeze();       // This is our indicator! The user has to switch this off later again!
+                      if( pitch_state3_toggle_ )
+                      {
+                         cv_scaler_->set_voct_cv_quantized(false);       // ### MB 20220109   
+                         cv_scaler_->set_voct_cv_dejittered(true);         // ### MB 20220109   
+                      }
+                      else
+                      {
+                         cv_scaler_->set_voct_cv_quantized(true);         // ### MB 20220109   
+                         cv_scaler_->set_voct_cv_dejittered(false);        // ### MB 20220109   
+                      }  
+                    }                      
+                }  
+                else    // (switches_.pressed(SWITCH_MUTE_IN)) 
+                {
+                  // ### MB 20220104 new feature for Cirrus:  CV pitch and/or CV VOct modes
+                  pitch_state3_toggle_ = false;
+                  random_pitch_state_++;
+                  random_pitch_state_ %= 4;
+                
+                  if(random_pitch_state_ == 3)
+                  {
+                       cv_scaler_->set_voct_cv_quantized(true);        // ### MB 20220109   
                        cv_scaler_->set_voct_cv_dejittered(true);        // ### MB 20220109   
-                    }  
-                    else
-                    {  
+                   }
+                   else
+                   {  
                       cv_scaler_->set_voct_cv_quantized(false);             // ### MB 20220109   
                       cv_scaler_->set_voct_cv_dejittered(false);             // ### MB 20220109 
                     }  

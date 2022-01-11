@@ -144,6 +144,7 @@ class Ui {
   uint32_t save_menu_time_;
   uint32_t mode_menu_time_;
   uint8_t random_pitch_state_; // ### MB 20220104 new feature for Cirrus 0==off, 1==on, 2==chromatic quantize  
+  bool pitch_state3_toggle_;    // ### MB 20220110
   
   DISALLOW_COPY_AND_ASSIGN(Ui);
 };
